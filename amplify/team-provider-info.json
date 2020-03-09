@@ -1,0 +1,20 @@
+{
+    "dev": {
+        "awscloudformation": {
+            "AuthRoleName": "amplify-scanapp-dev-154145-authRole",
+            "UnauthRoleArn": "arn:aws:iam::757702703697:role/amplify-scanapp-dev-154145-unauthRole",
+            "AuthRoleArn": "arn:aws:iam::757702703697:role/amplify-scanapp-dev-154145-authRole",
+            "Region": "eu-central-1",
+            "DeploymentBucketName": "amplify-scanapp-dev-154145-deployment",
+            "UnauthRoleName": "amplify-scanapp-dev-154145-unauthRole",
+            "StackName": "amplify-scanapp-dev-154145",
+            "StackId": "arn:aws:cloudformation:eu-central-1:757702703697:stack/amplify-scanapp-dev-154145/1bc56250-6214-11ea-9458-067c398aa192",
+            "AmplifyAppId": "d2p52e0hdwral5"
+        },
+        "categories": {
+            "auth": {
+                "scanappd9b86173": {}
+            }
+        }
+    }
+}

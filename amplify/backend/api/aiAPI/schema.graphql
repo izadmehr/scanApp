@@ -1,0 +1,5 @@
+type text @model {
+	id: ID!
+	text: String!
+	email: String!
+}
