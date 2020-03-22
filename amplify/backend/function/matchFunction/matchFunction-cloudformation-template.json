@@ -131,6 +131,28 @@
                             "logs:CreateLogStream",
                             "logs:PutLogEvents"],
                             "Resource": { "Fn::Sub" : [ "arn:aws:logs:${region}:${account}:log-group:/aws/lambda/${lambda}:log-stream:*", { "region": {"Ref": "AWS::Region"},  "account": {"Ref": "AWS::AccountId"}, "lambda": {"Ref": "LambdaFunction"}} ]}
+                        },
+                        {
+                            "Effect": "Allow",
+                            "Action": [
+                                "dynamodb:Get*",
+                                "dynamodb:Query",
+                                "dynamodb:Scan"
+                            ],
+                            "Resource": {
+                                "Fn::Sub": [
+                                    "arn:aws:dynamodb:${region}:${account}:table/*",
+                                    {
+                                        "region": {
+                                            "Ref": "AWS::Region"
+                                        },
+                                        "account": {
+                                            "Ref": "AWS::AccountId"
+                                        },
+                                    }
+                                ]
+                            }
+
                         }
                     ]
                 }
