@@ -3,3 +3,15 @@ type text @model {
 	text: String!
 	email: String!
 }
+
+type Mutation {
+	match(input: matchInput): matchResult @function(name: "matchFunction-${env}")
+}
+
+type matchResult {
+	items: String
+}
+
+input matchInput {
+	text: String!
+}
