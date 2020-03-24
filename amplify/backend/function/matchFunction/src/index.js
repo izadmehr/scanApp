@@ -40,7 +40,7 @@ function getItems() {
         tableName =
             tableName +
             "-" +
-            process.env.API_SCANAPP_GRAPHQLAPIIDOUTPUT +
+            process.env.API_AIAPI_GRAPHQLAPIIDOUTPUT +
             "-" +
             process.env.ENV;
     }
