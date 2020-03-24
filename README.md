@@ -1,4 +1,5 @@
-##Text Recognizing AWS Amplify
+## Text Recognizing AWS Amplify ##
+
 This repo contains both React Native & backend.
 
 1. The React Native app gets the image.
