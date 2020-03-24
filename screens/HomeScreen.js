@@ -1,179 +1,216 @@
-import * as React from 'react';
-import { Image, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { ScrollView } from 'react-native-gesture-handler';
-import * as WebBrowser from 'expo-web-browser';
+import React from "react";
+import { Alert, StyleSheet, Text, View, TouchableOpacity } from "react-native";
+import Constants from "expo-constants";
+import { Camera } from "expo-camera";
+import * as Permissions from "expo-permissions";
 
-import { MonoText } from '../components/StyledText';
+import Amplify, {
+  API,
+  Storage,
+  Predictions,
+  graphqlOperation
+} from "aws-amplify";
 
-export default function HomeScreen() {
-  return (
-    <View style={styles.container}>
-      <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-        <View style={styles.welcomeContainer}>
-          <Image
-            source={
-              __DEV__
-                ? require('../assets/images/robot-dev.png')
-                : require('../assets/images/robot-prod.png')
-            }
-            style={styles.welcomeImage}
-          />
-        </View>
+import { AmazonAIPredictionsProvider } from "@aws-amplify/predictions";
+import * as mutations from "../src/graphql/mutations";
+import awsconfig from "../aws-exports";
 
-        <View style={styles.getStartedContainer}>
-          <DevelopmentModeNotice />
+Amplify.configure(awsconfig);
+Amplify.addPluggable(new AmazonAIPredictionsProvider());
 
-          <Text style={styles.getStartedText}>Open up the code for this screen:</Text>
+import { Ionicons } from "@expo/vector-icons";
 
-          <View style={[styles.codeHighlightContainer, styles.homeScreenFilename]}>
-            <MonoText>screens/HomeScreen.js</MonoText>
-          </View>
+export default class CameraScreen extends React.Component {
+  state = {
+    flash: "off",
+    zoom: 0,
+    autoFocus: "on",
+    type: "back",
+    whiteBalance: "auto",
+    ratio: "16:9",
+    newPhotos: false,
+    permissionsGranted: false,
+    pictureSize: "1280x720",
+    pictureSizes: ["1280x720"],
+    pictureSizeId: 0
+  };
 
-          <Text style={styles.getStartedText}>
-            Change any of the text, save the file, and your app will automatically reload.
-          </Text>
-        </View>
+  async componentDidMount() {
+    const { status } = await Permissions.askAsync(Permissions.CAMERA);
+    this.setState({ permissionsGranted: status === "granted" });
+  }
 
-        <View style={styles.helpContainer}>
-          <TouchableOpacity onPress={handleHelpPress} style={styles.helpLink}>
-            <Text style={styles.helpLinkText}>Help, it didn’t automatically reload!</Text>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
+  toggleFocus = () =>
+    this.setState({ autoFocus: this.state.autoFocus === "on" ? "off" : "on" });
 
-      <View style={styles.tabBarInfoContainer}>
-        <Text style={styles.tabBarInfoText}>This is a tab bar. You can edit it in:</Text>
+  takePicture = () => {
+    if (this.camera) {
+      this.camera.takePictureAsync({ onPictureSaved: this.onPictureSaved });
+    }
+  };
 
-        <View style={[styles.codeHighlightContainer, styles.navigationFilename]}>
-          <MonoText style={styles.codeHighlightText}>navigation/BottomTabNavigator.js</MonoText>
-        </View>
+  uploadToStorage = async pathToImageFile => {
+    try {
+      const response = await fetch(pathToImageFile);
+
+      const blob = await response.blob();
+
+      const s3photo = await Storage.put("file-" + Date.now() + ".jpeg", blob, {
+        contentType: "image/jpeg"
+      });
+
+      await Predictions.identify({
+        text: {
+          source: {
+            key: s3photo.key,
+            level: "public" //optional, default is the configured on Storage category
+          },
+          format: "PLAIN" // Available options "PLAIN", "FORM", "TABLE", "ALL"
+        }
+      })
+        .then(async ({ text: { fullText } }) => {
+          const input = {
+            text: fullText
+          };
+
+          await API.graphql(graphqlOperation(mutations.match, { input: input }))
+            .then(result => {
+              const item = JSON.parse(result.data.match.items);
+
+              if (typeof item.text === "undefined") {
+                Alert.alert(`There was no match!`);
+              } else {
+                Alert.alert(
+                  `Whoohoo! There was a match with \"${item.text}\" the email is \"${item.email}\"`
+                );
+              }
+            })
+            .catch(err => {
+              console.log(err);
+            });
+        })
+        .catch(err => console.log(err));
+
+      //
+    } catch (err) {
+      console.log(err);
+    }
+  };
+
+  handleMountError = ({ message }) => console.error(message);
+
+  onPictureSaved = async photo => {
+    this.uploadToStorage(photo.uri);
+  };
+
+  renderNoPermissions = () => (
+    <View style={styles.noPermissions}>
+      <Text style={{ color: "white" }}>
+        Camera permissions not granted - cannot open camera preview.
+      </Text>
+    </View>
+  );
+
+  renderTopBar = () => (
+    <View style={styles.topBar}>
+      <TouchableOpacity style={styles.toggleButton} onPress={this.toggleFocus}>
+        <Text
+          style={[
+            styles.autoFocusLabel,
+            { color: this.state.autoFocus === "on" ? "white" : "#6b6b6b" }
+          ]}
+        >
+          FOCUS
+        </Text>
+      </TouchableOpacity>
+    </View>
+  );
+
+  renderBottomBar = () => (
+    <View style={styles.bottomBar}>
+      <View style={{ flex: 0.4 }}>
+        <TouchableOpacity
+          onPress={this.takePicture}
+          style={{ alignSelf: "center" }}
+        >
+          <Ionicons name="ios-radio-button-on" size={70} color="white" />
+        </TouchableOpacity>
       </View>
     </View>
   );
-}
 
-HomeScreen.navigationOptions = {
-  header: null,
-};
-
-function DevelopmentModeNotice() {
-  if (__DEV__) {
-    const learnMoreButton = (
-      <Text onPress={handleLearnMorePress} style={styles.helpLinkText}>
-        Learn more
-      </Text>
-    );
-
-    return (
-      <Text style={styles.developmentModeText}>
-        Development mode is enabled: your app will be slower but you can use useful development
-        tools. {learnMoreButton}
-      </Text>
-    );
-  } else {
-    return (
-      <Text style={styles.developmentModeText}>
-        You are not in development mode: your app will run at full speed.
-      </Text>
-    );
-  }
-}
-
-function handleLearnMorePress() {
-  WebBrowser.openBrowserAsync('https://docs.expo.io/versions/latest/workflow/development-mode/');
-}
-
-function handleHelpPress() {
-  WebBrowser.openBrowserAsync(
-    'https://docs.expo.io/versions/latest/get-started/create-a-new-app/#making-your-first-change'
+  renderCamera = () => (
+    <View style={{ flex: 1 }}>
+      <Camera
+        ref={ref => {
+          this.camera = ref;
+        }}
+        style={styles.camera}
+        onCameraReady={this.collectPictureSizes}
+        type={this.state.type}
+        autoFocus={this.state.autoFocus}
+        zoom={this.state.zoom}
+        whiteBalance={this.state.whiteBalance}
+        ratio={this.state.ratio}
+        pictureSize={this.state.pictureSize}
+        onMountError={this.handleMountError}
+      >
+        {this.renderTopBar()}
+        {this.renderBottomBar()}
+      </Camera>
+    </View>
   );
+
+  render() {
+    const cameraScreenContent = this.state.permissionsGranted
+      ? this.renderCamera()
+      : this.renderNoPermissions();
+    return <View style={styles.container}>{cameraScreenContent}</View>;
+  }
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: "#000"
   },
-  developmentModeText: {
-    marginBottom: 20,
-    color: 'rgba(0,0,0,0.4)',
-    fontSize: 14,
-    lineHeight: 19,
-    textAlign: 'center',
+  camera: {
+    flex: 1,
+    justifyContent: "space-between"
   },
-  contentContainer: {
-    paddingTop: 30,
+  topBar: {
+    flex: 0.2,
+    backgroundColor: "transparent",
+    flexDirection: "row",
+    justifyContent: "space-around",
+    paddingTop: Constants.statusBarHeight / 2
   },
-  welcomeContainer: {
-    alignItems: 'center',
-    marginTop: 10,
-    marginBottom: 20,
+  bottomBar: {
+    backgroundColor: "transparent",
+    alignSelf: "flex-end",
+    justifyContent: "space-between",
+    flex: 0.12,
+    flexDirection: "row"
   },
-  welcomeImage: {
-    width: 100,
-    height: 80,
-    resizeMode: 'contain',
-    marginTop: 3,
-    marginLeft: -10,
+  noPermissions: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 10
   },
-  getStartedContainer: {
-    alignItems: 'center',
-    marginHorizontal: 50,
+
+  toggleButton: {
+    flex: 0.25,
+    height: 40,
+    marginHorizontal: 2,
+    marginBottom: 10,
+    marginTop: 20,
+    padding: 5,
+    alignItems: "center",
+    justifyContent: "center"
   },
-  homeScreenFilename: {
-    marginVertical: 7,
-  },
-  codeHighlightText: {
-    color: 'rgba(96,100,109, 0.8)',
-  },
-  codeHighlightContainer: {
-    backgroundColor: 'rgba(0,0,0,0.05)',
-    borderRadius: 3,
-    paddingHorizontal: 4,
-  },
-  getStartedText: {
-    fontSize: 17,
-    color: 'rgba(96,100,109, 1)',
-    lineHeight: 24,
-    textAlign: 'center',
-  },
-  tabBarInfoContainer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    ...Platform.select({
-      ios: {
-        shadowColor: 'black',
-        shadowOffset: { width: 0, height: -3 },
-        shadowOpacity: 0.1,
-        shadowRadius: 3,
-      },
-      android: {
-        elevation: 20,
-      },
-    }),
-    alignItems: 'center',
-    backgroundColor: '#fbfbfb',
-    paddingVertical: 20,
-  },
-  tabBarInfoText: {
-    fontSize: 17,
-    color: 'rgba(96,100,109, 1)',
-    textAlign: 'center',
-  },
-  navigationFilename: {
-    marginTop: 5,
-  },
-  helpContainer: {
-    marginTop: 15,
-    alignItems: 'center',
-  },
-  helpLink: {
-    paddingVertical: 15,
-  },
-  helpLinkText: {
-    fontSize: 14,
-    color: '#2e78b7',
-  },
+  autoFocusLabel: {
+    fontSize: 20,
+    fontWeight: "bold"
+  }
 });
